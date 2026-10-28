@@ -285,6 +285,7 @@ ndk::ScopedAStatus PowerHintSession<HintManagerT, PowerSessionManagerT>::resume(
     }
     mPSManager->setThreadsFromPowerSession(mSessionId, mDescriptor->thread_ids);
     mDescriptor->is_active.store(true);
+    mPauseViolationLogged = false;
     // resume boost
     mPSManager->resume(mSessionId);
     ATRACE_INT(mAppDescriptorTrace->trace_active.c_str(), true);
@@ -434,7 +435,10 @@ ndk::ScopedAStatus PowerHintSession<HintManagerT, PowerSessionManagerT>::reportA
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
     }
     if (!mDescriptor->is_active.load()) {
-        ALOGE("Error: shouldn't report duration during pause state.");
+        if (!mPauseViolationLogged) {
+            ALOGE("Error: shouldn't report duration during pause state.");
+            mPauseViolationLogged = true;
+        }
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
     }
     auto adpfConfig = getAdpfProfile();
