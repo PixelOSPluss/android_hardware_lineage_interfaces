@@ -25,7 +25,6 @@
 #include <private/android_filesystem_config.h>
 #include <processgroup/processgroup.h>
 #include <sys/syscall.h>
-#include <unistd.h>
 #include <utils/Trace.h>
 
 #include "AdpfTypes.h"
@@ -81,12 +80,6 @@ static int set_uclamp(int tid, UclampRange range) {
         return errno;
     }
     return 0;
-}
-
-bool TaskExists(pid_t tid) {
-    // Sessions are paused once their threads exit, so resetting profiles for
-    // those tids is expected to fail and should not be logged.
-    return ::access(("/proc/" + std::to_string(tid)).c_str(), F_OK) == 0;
 }
 }  // namespace
 
@@ -190,9 +183,6 @@ void PowerSessionManager<HintManagerT>::removePowerSession(int64_t sessionId) {
     }
 
     for (auto tid : removedThreads) {
-        if (!TaskExists(tid)) {
-            continue;
-        }
         if (!SetTaskProfiles(tid, profiles)) {
             ALOGE("Failed to remove task profiles for tid:%d", tid);
         }
@@ -232,9 +222,6 @@ void PowerSessionManager<HintManagerT>::setThreadsFromPowerSession(
     }
     profiles = getSessionTaskProfiles(sessionId, false);
     for (auto tid : removedThreads) {
-        if (!TaskExists(tid)) {
-            continue;
-        }
         if (!SetTaskProfiles(tid, profiles)) {
             ALOGE("Failed to remove task profiles for tid:%d", tid);
         }
