@@ -76,7 +76,8 @@ static int set_uclamp(int tid, UclampRange range) {
 
     const int ret = syscall(__NR_sched_setattr, tid, attr, 0);
     if (ret) {
-        ALOGW("sched_setattr failed for thread %d, err=%d", tid, errno);
+        ALOGW("sched_setattr failed for thread %d, err=%d, util_min=%u util_max=%u", tid, errno,
+              attr.sched_util_min, attr.sched_util_max);
         return errno;
     }
     return 0;
