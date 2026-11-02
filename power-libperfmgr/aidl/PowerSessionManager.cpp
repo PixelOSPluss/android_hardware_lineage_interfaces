@@ -65,13 +65,17 @@ struct sched_attr {
 static int rtPriority(int tid) {
     struct sched_param param = {};
     int policy = sched_getscheduler(tid);
-    if (policy < 0)
+    if (policy < 0) {
+        ALOGW("sched_getscheduler failed for thread %d, err=%d", tid, errno);
         return 0;
+    }
     if (policy != SCHED_FIFO && policy != SCHED_RR)
         return 0;
-    if (sched_getparam(tid, &param) < 0)
-        return sched_get_priority_min(policy);
-    return param.sched_priority > 0 ? param.sched_priority : sched_get_priority_min(policy);
+    if (sched_getparam(tid, &param) < 0 || param.sched_priority <= 0) {
+        int min = sched_get_priority_min(policy);
+        return min > 0 ? min : 0;
+    }
+    return param.sched_priority;
 }
 
 static int set_uclamp(int tid, UclampRange range) {
