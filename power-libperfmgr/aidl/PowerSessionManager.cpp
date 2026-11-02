@@ -24,6 +24,7 @@
 #include <powerhal_flags.h>
 #include <private/android_filesystem_config.h>
 #include <processgroup/processgroup.h>
+#include <sched.h>
 #include <sys/syscall.h>
 #include <utils/Trace.h>
 
@@ -61,6 +62,18 @@ struct sched_attr {
     __u32 sched_util_max;
 };
 
+static int rtPriority(int tid) {
+    struct sched_param param = {};
+    int policy = sched_getscheduler(tid);
+    if (policy < 0)
+        return 0;
+    if (policy != SCHED_FIFO && policy != SCHED_RR)
+        return 0;
+    if (sched_getparam(tid, &param) < 0)
+        return sched_get_priority_min(policy);
+    return param.sched_priority > 0 ? param.sched_priority : sched_get_priority_min(policy);
+}
+
 static int set_uclamp(int tid, UclampRange range) {
     // Ensure min and max are bounded by the range limits and each other
     range.uclampMin = std::min(std::max(kUclampMin, range.uclampMin), kUclampMax);
@@ -72,6 +85,13 @@ static int set_uclamp(int tid, UclampRange range) {
             (SCHED_FLAG_KEEP_ALL | SCHED_FLAG_UTIL_CLAMP_MIN | SCHED_FLAG_UTIL_CLAMP_MAX);
     attr.sched_util_min = range.uclampMin;
     attr.sched_util_max = range.uclampMax;
+    // KEEP_PARAMS means the priority is never applied, but __sched_setscheduler()
+    // validates the policy/priority pair before it looks at the flag:
+    // rt_policy(policy) != (sched_priority != 0) is EINVAL. SurfaceFlinger runs
+    // its main and RenderEngine threads under SCHED_FIFO, so a zero priority is
+    // rejected there. Send a priority that matches the target's policy; the
+    // value is discarded either way.
+    attr.sched_priority = rtPriority(tid);
 
     const int ret = syscall(__NR_sched_setattr, tid, attr, 0);
     if (ret) {
